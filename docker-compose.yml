@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: postgres-vectordb
+    environment:
+      POSTGRES_DB: vectordb
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persist database data
+      - postgres-data:/var/lib/postgresql/data
+      # Auto-enable pgvector extension on startup
+#      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - spring-ai-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  spring-ai-network:
+    driver: bridge
