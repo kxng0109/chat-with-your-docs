@@ -4,7 +4,6 @@ import io.github.kxng0109.chatwithdocs.model.DocumentUploadResponse;
 import io.github.kxng0109.chatwithdocs.service.DocumentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +23,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class DocumentController {
     private final DocumentService documentService;
-    private final ChatModel chatModel;
 
     /**
      * Handles the upload of a document file, processes it, and returns a response containing

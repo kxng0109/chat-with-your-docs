@@ -86,6 +86,16 @@ public class ChatService {
                                   .call()
                                   .content();
 
+        if (answer == null) {
+            log.info("No answer received for the question, \"{}\"", question);
+            return ChatResponse.builder()
+                               .processingTimeMs(System.currentTimeMillis() - startTime)
+                               .answer("No answer received for the question.")
+                               .sources(List.of())
+                               .question(question)
+                               .build();
+        }
+
         log.info("LLM responded with answer ({} chars)", answer.length());
 
         long processingTime = System.currentTimeMillis() - startTime;
