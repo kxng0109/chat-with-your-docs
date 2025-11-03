@@ -14,6 +14,30 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * GlobalExceptionHandler is a centralized exception handling component
+ * using @RestControllerAdvice to catch and process exceptions thrown
+ * by controllers across the application.
+ *
+ * This class defines specific handling for exceptions including validation errors,
+ * custom document processing errors, file upload size limit breaches, and generic
+ * unexpected errors, providing consistent response structures to the client.
+ *
+ * Key exception handling methods:
+ * 1. handleValidationExceptions: Processes MethodArgumentNotValidException errors
+ *    to extract and return detailed field error information for client inputs.
+ * 2. handleDocumentProcessingException: Handles the application-specific
+ *    DocumentProcessingException to provide customized error messages related
+ *    to document processing failures.
+ * 3. handleMaxUploadSizeExceededException: Handles MaxUploadSizeExceededException
+ *    to respond with appropriate messages when file size exceeds defined limits.
+ * 4. handleGenericException: A catch-all handler for other unhandled general exceptions,
+ *    returns a generic internal server error response.
+ *
+ * Each handler constructs a detailed error response with information such as
+ * timestamp, HTTP status, error type, and a user-friendly message, ensuring
+ * consistent and informative error responses to the client.
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 

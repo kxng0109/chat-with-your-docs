@@ -9,9 +9,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # Persist database data
       - postgres-data:/var/lib/postgresql/data
-      # Auto-enable pgvector extension on startup
 #      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - spring-ai-network
