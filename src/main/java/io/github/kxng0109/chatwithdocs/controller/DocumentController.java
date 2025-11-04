@@ -25,21 +25,26 @@ public class DocumentController {
     private final DocumentService documentService;
 
     /**
-     * Handles the upload of a document file, processes it, and returns a response containing
-     * details of the upload and processing results.
+     * Handles the upload of a document file, processes it, and returns a response with processing details.
+     * Validates the file input and processes it to generate a structured response.
      *
-     * @param file the document file to be uploaded, represented as a {@code MultipartFile}
-     *             containing the file's binary content.
-     * @return a {@code ResponseEntity} containing a {@code DocumentUploadResponse} object
-     * with detailed information about the uploaded and processed document, including
-     * the file name, number of chunks created and stored, processing time, and a
-     * success message.
+     * @param file the file to be uploaded, represented as a {@code MultipartFile}; may be null or empty
+     *             to allow customized exception handling.
+     * @return a {@code ResponseEntity} containing a {@code DocumentUploadResponse} object with details
+     *         about the uploaded document or an error message if the validation fails.
      */
     @PostMapping(value = "/upload",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    public ResponseEntity<DocumentUploadResponse> uploadDocument(@RequestParam MultipartFile file) {
+    public ResponseEntity<DocumentUploadResponse> uploadDocument(@RequestParam(required = false) MultipartFile file /*Making it not required so that I can throw an exception of my own instead of Spring's 500*/) {
+        if (file == null || file.isEmpty()) {
+            DocumentUploadResponse response = DocumentUploadResponse.builder()
+                                                                    .message("File required.")
+                                                                    .build();
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
         log.info("Received document for upload: {}", file.getOriginalFilename());
 
         DocumentUploadResponse response = documentService.processDocument(file);
