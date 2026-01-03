@@ -14,6 +14,7 @@ import lombok.Builder;
  * - chunksStored: The total number of chunks successfully stored in the system.
  * - message: A descriptive message providing additional information or status of the upload.
  * - processingTimeMs: The time, in milliseconds, taken to process the upload operation.
+ * - sessionId: UUID of the chat session
  */
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -26,6 +27,8 @@ public record DocumentUploadResponse(
 
         String message,
 
-        Long processingTimeMs
+        Long processingTimeMs,
+
+        String sessionId
 ) {
 }

@@ -1,7 +1,13 @@
 package io.github.kxng0109.chatwithdocs.service;
 
+import io.github.kxng0109.chatwithdocs.entity.ChatSession;
+import io.github.kxng0109.chatwithdocs.entity.SessionDocument;
 import io.github.kxng0109.chatwithdocs.exception.DocumentProcessingException;
+import io.github.kxng0109.chatwithdocs.model.DocumentResult;
 import io.github.kxng0109.chatwithdocs.model.DocumentUploadResponse;
+import io.github.kxng0109.chatwithdocs.model.MultiDocumentUploadResponse;
+import io.github.kxng0109.chatwithdocs.repository.ChatSessionRepository;
+import io.github.kxng0109.chatwithdocs.repository.SessionDocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -9,11 +15,16 @@ import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,44 +40,175 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DocumentService {
     private final VectorStore vectorStore;
+    private final SessionService sessionService;
+    private final SessionDocumentRepository documentRepository;
+    private final ChatSessionRepository chatSessionRepository;
+
+    /**
+     * Processes multiple documents and adds them to a session.
+     * Each document is processed independently - failures don't affect other documents.
+     *
+     * @param sessionId the id (UUID) of the session to add the documents to
+     * @param files     array of files to process
+     * @return {@code MultiDocumentUploadResponse} containing status for each document
+     * @throws io.github.kxng0109.chatwithdocs.exception.SessionNotFoundException if session does not exist
+     */
+    @Transactional
+    public MultiDocumentUploadResponse processDocuments(String sessionId, MultipartFile[] files) {
+        long startTime = System.currentTimeMillis();
+        log.info("Starting processing of {} documents for session: {}", files.length, sessionId);
+
+        ChatSession session = sessionService.getSessionEntity(sessionId);
+
+        List<DocumentResult> results = new ArrayList<>();
+        int successCount = 0;
+        int failureCount = 0;
+        int totalChunksCreated = 0;
+
+        for (MultipartFile file : files) {
+            try {
+                DocumentUploadResponse result = processDocument(file, session.getSessionId());
+                DocumentResult successfulFile = DocumentResult.builder()
+                                                              .filename(file.getOriginalFilename())
+                                                              .success(true)
+                                                              .chunksCreated(result.chunksCreated())
+                                                              .processingTimeMs(result.processingTimeMs())
+                                                              .build();
+
+                results.add(successfulFile);
+                successCount++;
+                totalChunksCreated += result.chunksCreated();
+            } catch (Exception e) {
+                log.error(
+                        "Failed to process document {}: {}",
+                        file.getOriginalFilename(),
+                        e.getMessage(),
+                        e
+                );
+                DocumentResult failedFile = DocumentResult.builder()
+                                                          .filename(file.getOriginalFilename())
+                                                          .success(false)
+                                                          .chunksCreated(null)
+                                                          .errorMessage(e.getMessage())
+                                                          .build();
+                results.add(failedFile);
+                failureCount++;
+            }
+        }
+
+        long totalTime = System.currentTimeMillis() - startTime;
+
+        String message = failureCount == 0
+                ? "All documents have been processed successfully"
+                : String.format("%d of %d documents processed successfully", successCount, files.length);
+        return MultiDocumentUploadResponse.builder()
+                                          .sessionId(sessionId)
+                                          .totalFiles(files.length)
+                                          .successfulUploads(successCount)
+                                          .failedUploads(failureCount)
+                                          .totalChunksCreated(totalChunksCreated)
+                                          .totalProcessingTimeMs(totalTime)
+                                          .documents(results)
+                                          .message(message)
+                                          .build();
+    }
 
     /**
      * Processes the given document file by validating, reading, splitting, enriching,
      * and storing it, and returns a response containing processing details.
      *
-     * @param file the input file to be processed, represented as a {@code MultipartFile}.
+     * @param file      the input file to be processed, represented as a {@code MultipartFile}.
+     * @param sessionId the chat session to which the document belongs.
      * @return a {@code DocumentUploadResponse} containing details about the processed file,
      * including the number of chunks created and stored, the processing time,
      * and a message indicating success.
      */
-    public DocumentUploadResponse processDocument(MultipartFile file) {
+    public DocumentUploadResponse processDocument(MultipartFile file, String sessionId) {
         long startTime = System.currentTimeMillis();
-        log.info("Starting document processing for file: {}", file.getOriginalFilename());
-
-        validateFile(file);
-
-        List<Document> documents = readDocument(file);
-        log.info("Read {} documents from file: {}",
-                 documents.size(),
-                 file.getOriginalFilename()
+        String filename = file.getOriginalFilename();
+        log.info("Starting documentRecord processing for file: {} for session with id: {}", filename,
+                 sessionId
         );
 
-        List<Document> chunks = splitDocuments(documents);
-        log.info("Document was split into {} chunks", chunks.size());
+        ChatSession session = sessionService.getSessionEntity(sessionId);
 
-        enrichChunksWithMetadata(chunks, file.getName());
+        SessionDocument documentRecord = SessionDocument.builder()
+                                                        .session(session)
+                                                        .originalFilename(filename)
+                                                        .contentType(file.getContentType())
+                                                        .fileSize(file.getSize())
+                                                        .status(SessionDocument.DocumentStatus.PROCESSING)
+                                                        .build();
+        documentRecord = documentRepository.save(documentRecord);
 
-        storeChunks(chunks);
-        log.info("Stored {} chunks in vector database", chunks.size());
+        try {
+            validateFile(file);
 
-        long processingTime = System.currentTimeMillis() - startTime;
-        return DocumentUploadResponse.builder()
-                                     .processingTimeMs(processingTime)
-                                     .chunksStored(chunks.size())
-                                     .filename(file.getName())
-                                     .chunksCreated(chunks.size())
-                                     .message("Documents processed successfully")
-                                     .build();
+            List<Document> documents = readDocument(file);
+            log.info("Read {} documents from file: {}",
+                     documents.size(),
+                     file.getOriginalFilename()
+            );
+
+            List<Document> chunks = splitDocuments(documents);
+            log.debug("Document was split into {} chunks", chunks.size());
+
+            enrichChunksWithMetadata(chunks, filename, session.getSessionId());
+
+            storeChunks(chunks);
+            log.info("Stored {} chunks in vector database", chunks.size());
+
+            long processingTime = System.currentTimeMillis() - startTime;
+
+            documentRecord.setChunkCount(chunks.size());
+            documentRecord.setStatus(SessionDocument.DocumentStatus.COMPLETED);
+            documentRecord.setProcessingTimeMs(processingTime);
+            documentRepository.save(documentRecord);
+
+            return DocumentUploadResponse.builder()
+                                         .processingTimeMs(processingTime)
+                                         .chunksStored(chunks.size())
+                                         .filename(filename)
+                                         .chunksCreated(chunks.size())
+                                         .message("Documents processed successfully")
+                                         .build();
+        } catch (Exception e) {
+            documentRecord.setStatus(SessionDocument.DocumentStatus.FAILED);
+            documentRecord.setErrorMessage(e.getMessage());
+            documentRepository.save(documentRecord);
+            throw new DocumentProcessingException("Failed to process document: " + filename, e);
+        }
+    }
+
+    /**
+     * Deletes all documents in the session
+     *
+     * @param sessionId the UUID of the chat session
+     * @throws io.github.kxng0109.chatwithdocs.exception.SessionNotFoundException if {@code sessionId} is invalid
+     */
+    public void deleteAllDocuments(String sessionId) {
+        ChatSession session = sessionService.getSessionEntity(sessionId);
+        int documentCount = session.getDocumentCount();
+
+        try {
+            Filter.Expression filterExpression = new FilterExpressionBuilder()
+                    .eq("sessionId", sessionId)
+                    .build();
+
+            vectorStore.delete(filterExpression);
+            log.info("Deleted vectors for session: {}", sessionId);
+
+            session.getDocuments().clear();
+            chatSessionRepository.save(session);
+
+            log.info("Deleted {} documents from session with ID: {}",
+                     documentCount,
+                     sessionId
+            );
+        } catch (Exception e) {
+            log.error("Failed to delete vectors for session {}: {}", sessionId, e.getMessage(), e);
+            throw new DocumentProcessingException("Failed to delete documents from session: " + sessionId, e);
+        }
     }
 
     /**
@@ -152,21 +294,25 @@ public class DocumentService {
      * @param chunks   the list of document chunks that need to be enriched with metadata
      * @param fileName the name of the file associated with the chunks
      */
-    private void enrichChunksWithMetadata(List<Document> chunks, String fileName) {
+    private void enrichChunksWithMetadata(List<Document> chunks, String fileName, String sessionId) {
+        Instant uploadTimestamp = Instant.now();
+
         for (int i = 0; i < chunks.size(); i++) {
             Document chunk = chunks.get(i);
             Map<String, Object> metadata = new HashMap<>(chunk.getMetadata());
+            metadata.put("sessionId", sessionId);
             metadata.put("filename", fileName);
             metadata.put("chunk_index", i);
             metadata.put("total_chunks", chunks.size());
-            metadata.put("upload_timestamp", System.currentTimeMillis());
+            metadata.put("upload_timestamp", uploadTimestamp.toString());
 
             chunk.getMetadata().putAll(metadata);
         }
 
-        log.debug("Successfully enriched {} chunks with metadata for file: {}",
+        log.debug("Successfully enriched {} chunks with metadata for file: {} with sessionId: {}",
                   chunks.size(),
-                  fileName
+                  fileName,
+                  sessionId
         );
     }
 

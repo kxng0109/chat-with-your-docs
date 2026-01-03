@@ -1,222 +1,178 @@
 # Chat with Docs - RAG Application
 
-A production-ready **Retrieval Augmented Generation (RAG)** system built with Spring AI, demonstrating enterprise-grade document processing and semantic question-answering capabilities.
+A production ready Retrieval Augmented Generation (RAG) system built with Spring AI. This application enables users to upload multiple documents, organize them into isolated chat sessions, and have conversations with any LLM provider based on the uploaded content.
 
 ## Overview
 
-This application implements a complete RAG pipeline for document-based question answering. It leverages vector embeddings and semantic search to provide accurate, context-aware responses from uploaded documents.
+This application implements a complete RAG pipeline for document based question answering. It leverages vector embeddings and semantic search to provide accurate, context aware responses from uploaded documents.
 
-**Purpose**: Educational project demonstrating Spring AI framework capabilities, RAG architecture patterns, and vector database integration.
+Key capabilities include session based document isolation, multi document uploads, conversation history, and support for multiple AI providers including local (Ollama) and cloud (OpenAI) options.
 
 ## Table of Contents
 
-- [Overview](#overview)
 - [Features](#features)
 - [Technology Stack](#technology-stack)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
+- [Configuration](#configuration)
 - [Usage](#usage)
 - [API Reference](#api-reference)
+- [Project Structure](#project-structure)
 - [Testing](#testing)
 - [Deployment](#deployment)
-- [AI Provider Configuration](#ai-provider-configuration)
 - [License](#license)
-- [Acknowledgments](#acknowledgments)
 
 ## Features
 
-- **Multi-Document Support**: Upload and process multiple PDF documents simultaneously
-- **Semantic Search**: Vector-based similarity search for accurate information retrieval
-- **Contextual Answers**: AI-generated responses with source attribution
-- **Provider Agnostic**: Abstraction layer supports multiple AI providers (Ollama, OpenAI, Azure, etc.)
-- **Local-First**: Default configuration runs entirely locally without external API dependencies
-- **RESTful API**: Clean, well-documented REST endpoints
-- **Scalable Architecture**: Designed for production deployment
-- **Extensible**: Plugin architecture for custom document processors and AI models
+### Session Based Document Management
+Each chat session acts as an isolated container for documents. Documents uploaded to one session are not visible or searchable from other sessions. This enables multiple independent research contexts within the same application.
+
+### Multi Document Support
+Upload and process multiple documents simultaneously. The system handles each file independently, providing detailed status for successful and failed uploads. All documents in a session contribute to the knowledge base for that session.
+
+### Conversation History
+The system maintains conversation history within each session, enabling context aware follow up questions. Previous exchanges are included in the prompt to provide continuity across messages.
+
+### Provider Agnostic AI Integration
+Switch between AI providers without code changes. The application supports Ollama for local execution and OpenAI for cloud based processing. Additional providers can be added through Spring AI abstractions.
+
+### Cross Document Querying
+When asking questions, the system searches across all documents in the session and synthesizes information from multiple sources. Responses include source attribution showing which documents contributed to the answer.
 
 ## Technology Stack
 
 ### Core Framework
-- **Spring Boot** 3.5.7 - Application framework
-- **Spring AI** - AI integration framework
-- **Java** 25 - Programming language
-- **Maven** - Build and dependency management
+- Spring Boot 3.5.7
+- Spring AI 1.0.3
+- Java 25
+- Maven
 
 ### AI Components
-- **Ollama** - Default LLM provider (llama3.2:1b for chat, nomic-embed-text for embeddings)
-- **Spring AI Abstractions** - Provider-agnostic interfaces (ChatModel, EmbeddingModel)
-
-**Note**: While this implementation uses Ollama for local execution, the application architecture supports seamless integration with commercial providers including OpenAI, Azure OpenAI, Anthropic Claude, Google Vertex AI, and AWS Bedrock through configuration changes only.
+- Ollama (default): llama3.2:1b for chat, nomic-embed-text for embeddings
+- OpenAI (optional): gpt-4o-mini for chat, text-embedding-3-small for embeddings
+- Spring AI Abstractions: ChatModel, EmbeddingModel, VectorStore
 
 ### Data Layer
-- **PostgreSQL** 18 - Primary database
-- **PGVector** - Vector similarity search extension
-- **HikariCP** - Connection pooling
+- PostgreSQL 18 with PGVector extension
+- Spring Data JPA
+- HikariCP connection pooling
 
 ### Document Processing
-- **Apache Tika** - Multi-format document parsing
-- **Apache PDFBox** - PDF text extraction
-- **Spring AI Document Readers** - Unified document abstraction
-
-### Development Tools
-- **Lombok** - Boilerplate reduction
-- **SLF4J/Logback** - Logging framework
-- **Spring Boot DevTools** - Development utilities
-- **JUnit 5** - Testing framework
-- **Mockito** - Mocking framework
-- **TestContainers** - Integration testing with Docker
+- Apache Tika for multi format document parsing
+- Apache PDFBox for PDF text extraction
+- Spring AI Document Readers and Text Splitters
 
 ## Architecture
 
 ### RAG Pipeline
 
-**Document Ingestion**
+Document Ingestion Flow:
 ```
-PDF Upload → Text Extraction → Chunking → Embedding → Vector Storage
+PDF Upload -> Text Extraction -> Chunking -> Embedding -> Vector Storage
 ```
 
-**Query Processing**
+Query Processing Flow:
 ```
-User Query → Embedding → Vector Search → Context Building → LLM → Response
+User Query -> Session Filter -> Vector Search -> Context Building -> LLM -> Response
 ```
 
 ### Component Responsibilities
 
 | Component | Responsibility |
 |-----------|---------------|
-| `DocumentController` | HTTP endpoint handling for document uploads |
-| `ChatController` | HTTP endpoint handling for query requests |
-| `DocumentService` | Business logic for document processing |
-| `ChatService` | RAG query orchestration and response generation |
-| `VectorStore` | Vector database operations (PGVector) |
-| `ChatModel` | LLM integration (provider-agnostic) |
-| `EmbeddingModel` | Text embedding generation (provider-agnostic) |
+| SessionController | HTTP endpoints for session management |
+| DocumentController | HTTP endpoints for document uploads |
+| ChatController | HTTP endpoints for chat queries |
+| SessionService | Session lifecycle and vector cleanup |
+| DocumentService | Document processing and embedding storage |
+| ChatService | RAG orchestration with session filtering |
+| VectorStore | PGVector operations with metadata filtering |
+| ChatModel | LLM integration (provider agnostic) |
+| EmbeddingModel | Text embedding generation |
 
-### Project Structure
+### Session Isolation
+
+Sessions provide logical isolation through metadata filtering. Each document chunk stored in the vector database includes a sessionId in its metadata.  When querying, the system filters results to only include chunks from the requested session.
 
 ```
-chat-with-your-docs/
-├── .github/
-│   └── workflows/
-│       └── ci.yml                           # CI/CD pipeline
-├── .mvn/                                      # Maven wrapper
-├── src/
-│   ├── main/
-│   │   ├── java/io/github/kxng0109/chatwithdocs/
-│   │   │   ├── ChatWithDocsApplication.java
-│   │   │   ├── controller/
-│   │   │   │   ├── ChatController.java
-│   │   │   │   ├── DocumentController.java
-│   │   │   │   └── TestController.java
-│   │   │   ├── service/
-│   │   │   │   ├── ChatService.java
-│   │   │   │   └── DocumentService.java
-│   │   │   ├── model/
-│   │   │   │   ├── ChatRequest.java
-│   │   │   │   ├── ChatResponse.java
-│   │   │   │   └── DocumentUploadResponse.java
-│   │   │   └── exception/
-│   │   │       ├── DocumentProcessingException.java
-│   │   │       └── GlobalExceptionHandler.java
-│   │   └── resources/
-│   │       └── application.properties
-│   └── test/
-│       ├── java/io/github/kxng0109/chatwithdocs/
-│       │   ├── ChatWithDocsApplicationIntegrationTest.java
-│       │   ├── controller/
-│       │   │   ├── ChatControllerTest.java
-│       │   │   └── DocumentControllerTest.java
-│       │   └── service/
-│       │       ├── ChatServiceTest.java
-│       │       └── DocumentServiceTest.java
-│       └── resources/
-│           └── application-test.properties
-├── .env.example                               # Environment variables template
-├── .gitignore                                 # Git ignore rules
-├── mvnw                                       # Maven wrapper (Linux/macOS)
-├── mvnw.cmd                                   # Maven wrapper (Windows)
-├── pom.xml                                    # Maven dependencies
-├── LICENSE                                    # MIT License
-└── README.md                                  # This file
+Session A: [doc1.pdf, doc2.pdf] -> Vectors with sessionId="A"
+Session B: [doc3.pdf, doc4.pdf] -> Vectors with sessionId="B"
+
+Query in Session A -> Only searches vectors where sessionId="A"
 ```
 
 ## Prerequisites
 
 ### Required Software
 
-- **JDK**: Version 21 or higher
-  ```bash
-  java -version
-  ```
+Java Development Kit version 21 or higher:
+```bash
+java -version
+```
 
-- **Maven**:
-  ```bash
-  mvn -version
-  ```
+Maven (or use the included wrapper):
+```bash
+mvn -version
+```
 
-- **Docker**: For PostgreSQL deployment
-  ```bash
-  docker --version
-  docker ps
-  ```
+Docker for PostgreSQL deployment:
+```bash
+docker --version
+```
 
-- **Ollama**: For local LLM execution (default configuration)
-  ```bash
-  # Download from https://ollama.com/download
-  ollama --version
-  ```
+Ollama for local LLM execution (if using Ollama provider):
+```bash
+ollama --version
+```
 
 ### System Requirements
 
-- **Memory**: Minimum 8GB RAM (16GB recommended for optimal performance)
-- **Disk**: 10GB free space (for models and vector storage)
-- **Network**: Internet connection for initial model downloads
+- Memory: Minimum 8GB RAM (16GB recommended for Ollama)
+- Disk: 10GB free space for models and vector storage
+- Network: Internet connection for initial setup and OpenAI provider
 
 ## Installation
 
-### 1. Clone Repository
+### Clone Repository
 
 ```bash
 git clone https://github.com/kxng0109/chat-with-your-docs.git
 cd chat-with-your-docs
 ```
 
-### 2. Environment Configuration
+### Environment Configuration
 
-Create your environment file from the template:
+Create your environment file from the template.
 
-**Linux/macOS:**
+Linux and macOS:
 ```bash
 cp .env.example .env
 ```
 
-**Windows (Command Prompt):**
+Windows Command Prompt:
 ```cmd
 copy .env.example .env
 ```
 
-**Windows (PowerShell):**
+Windows PowerShell:
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and configure your settings. The `.env.example` file contains all available configuration options with detailed comments. At minimum, update:
-
+Edit the . env file and configure your settings:
 ```properties
-# Recommended: Use a strong password
 POSTGRES_PASSWORD=your_secure_password_here
 
-# Only if using cloud providers instead of Ollama
-# OPENAI_API_KEY=your_api_key_here
+# For OpenAI provider
+OPENAI_API_KEY=sk-your-api-key-here
 ```
 
-**Security Warning**: Never commit the `.env` file. It contains sensitive credentials and is already included in `.gitignore`.
-
-### 3. Database Setup
+### Database Setup
 
 Start PostgreSQL with PGVector extension:
 
+Linux and macOS:
 ```bash
 docker run -d \
   --name postgres-vectordb \
@@ -228,7 +184,7 @@ docker run -d \
   pgvector/pgvector:pg18
 ```
 
-**Windows (Command Prompt):**
+Windows Command Prompt:
 ```cmd
 docker run -d ^
   --name postgres-vectordb ^
@@ -240,35 +196,16 @@ docker run -d ^
   pgvector/pgvector:pg18
 ```
 
-**Windows (PowerShell):**
-```powershell
-docker run -d `
-  --name postgres-vectordb `
-  -e POSTGRES_USER=postgres `
-  -e POSTGRES_PASSWORD=postgres `
-  -e POSTGRES_DB=vectordb `
-  -p 5432:5432 `
-  --restart unless-stopped `
-  pgvector/pgvector:pg18
-```
-
-**Verify container status:**
-
+Verify the container is running:
 ```bash
 docker ps
 ```
 
-Look for `postgres-vectordb` in the output.
+### AI Model Setup
 
-### 4. AI Model Setup
-
-Pull required Ollama models:
-
+For Ollama (default local provider):
 ```bash
-# Chat model (1B parameters, ~1.3GB)
 ollama pull llama3.2:1b
-
-# Embedding model (~300MB)
 ollama pull nomic-embed-text
 ```
 
@@ -277,319 +214,317 @@ Verify installation:
 ollama list
 ```
 
-Expected output:
-```
-NAME                    ID              SIZE
-llama3.2:1b                            1.3 GB
-nomic-embed-text                       274 MB
-```
+For OpenAI, ensure your API key is configured in the .env file.
 
-### 5. Application Build
+### Build Application
 
+Linux and macOS:
 ```bash
 ./mvnw clean install
 ```
 
-**Windows (PowerShell):**
-```powershell
-.\mvnw.cmd clean install
-```
-
-**Windows (Command Prompt):**
+Windows:
 ```cmd
-mvnw.cmd clean install
+mvnw. cmd clean install
 ```
 
-### 6. Application Startup
+### Start Application
 
-**Linux/macOS:**
+Linux and macOS:
 ```bash
 ./mvnw spring-boot:run
 ```
 
-**Windows (PowerShell):**
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-**Windows (Command Prompt):**
+Windows:
 ```cmd
 mvnw.cmd spring-boot:run
 ```
 
-Application will be available at: `http://localhost:8080`
+The application will be available at http://localhost:8080
 
-Verify startup in logs:
+## Configuration
+
+### AI Provider Selection
+
+Set the provider in application.properties or via environment variable:
+
+```properties
+# Use local Ollama (default)
+spring.ai.provider=ollama
+
+# Use OpenAI
+spring.ai.provider=openai
 ```
-Started ChatWithDocsApplication in X.XXX seconds
+
+### Ollama Configuration
+
+```properties
+spring.ai.ollama.base-url=http://localhost:11434
+spring.ai.ollama. chat.options.model=llama3.2:1b
+spring.ai.ollama.chat. options.temperature=0.7
+spring.ai.ollama.embedding.options.model=nomic-embed-text:v1.5
 ```
+
+### OpenAI Configuration
+
+```properties
+spring.ai.openai.api-key=${OPENAI_API_KEY}
+spring.ai.openai. chat.options.model=gpt-4o-mini
+spring. ai.openai.chat.options.temperature=0.7
+spring.ai.openai.embedding. options.model=text-embedding-3-small
+```
+
+### Vector Store Configuration
+
+```properties
+spring.ai.vectorstore.pgvector.dimensions=768
+spring.ai.vectorstore.pgvector.distance-type=cosine_distance
+spring. ai.vectorstore.pgvector.index-type=hnsw
+```
+
+Note: When switching between Ollama (768 dimensions) and OpenAI (1536 dimensions), you must update the dimensions setting and recreate the vector store table.
 
 ## Usage
 
-### Document Upload
+### Create a Session
 
-Upload single or multiple PDF documents for processing.
-
-**Single Document Upload (cURL)**
 ```bash
-curl -X POST http://localhost:8080/api/documents/upload \
+curl -X POST http://localhost:8080/api/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Research Project", "description": "AI research documents"}'
+```
+
+Response:
+```json
+{
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Research Project",
+  "description": "AI research documents",
+  "documentCount": 0,
+  "messageCount": 0,
+  "createdAt": "2025-01-15T10:30:00"
+}
+```
+
+### Upload Documents
+
+Upload multiple documents to a session:
+```bash
+curl -X POST http://localhost:8080/api/sessions/{sessionId}/documents \
   -H "Content-Type: multipart/form-data" \
-  -F "file=@/path/to/document.pdf"
+  -F "files=@document1.pdf" \
+  -F "files=@document2.pdf" \
+  -F "files=@document3.docx"
 ```
 
-**Using cURL (Windows - Command Prompt):**
-```cmd
-curl -X POST http://localhost:8080/api/documents/upload ^
-  -H "Content-Type: multipart/form-data" ^
-  -F "file=@C:\path\to\document.pdf"
-```
-
-**Response Format**
+Response:
 ```json
 {
-  "filename": "technical_specification.pdf",
-  "chunksCreated": 42,
-  "chunksStored": 42,
-  "message": "Document processed successfully",
-  "processingTimeMs": 3847
-}
-```
-
-**Processing Details**:
-- Documents are split into ~300-token chunks with 50-token overlap
-- Each chunk generates a 768-dimensional embedding vector
-- Chunks are stored with metadata (filename, timestamp, index) in PostgreSQL
-- All documents share a unified vector space for cross-document querying
-
-### Question Answering
-
-Query uploaded documents using natural language.
-
-**Basic Query (cURL)**
-```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "What are the key technical specifications?",
-    "topK": 5
-  }'
-```
-
-**Using cURL (Windows - Command Prompt):**
-```cmd
-curl -X POST http://localhost:8080/api/chat ^
-  -H "Content-Type: application/json" ^
-  -d "{\"question\": \"What are the key technical specifications?\", \"topK\": 5}"
-```
-
-**Advanced Query with Custom Parameters**
-```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "Compare performance metrics across all documents",
-    "topK": 10
-  }'
-```
-
-**Response Format**
-```json
-{
-  "answer": "Based on the technical specifications, the key metrics include...",
-  "sources": [
-    "Chunk from document A containing relevant specification...",
-    "Chunk from document B with performance data...",
-    "Chunk from document C discussing metrics..."
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+  "totalFiles": 3,
+  "successfulUploads": 3,
+  "failedUploads": 0,
+  "totalChunksCreated": 127,
+  "totalProcessingTimeMs": 5430,
+  "documents": [
+    {"filename": "document1.pdf", "success": true, "chunksCreated": 45},
+    {"filename": "document2.pdf", "success": true, "chunksCreated": 52},
+    {"filename": "document3.docx", "success": true, "chunksCreated": 30}
   ],
-  "question": "What are the key technical specifications?",
-  "processingTimeMs": 1842
+  "message": "All documents processed successfully"
 }
 ```
 
-**Query Parameters**:
-- `question` (required, string): Natural language query
-- `topK` (optional, integer, default: 5): Number of relevant chunks to retrieve
+### Chat with Documents
 
-**Cross-Document Querying**:
-When multiple documents are uploaded, the system:
-1. Searches across all documents simultaneously
-2. Ranks chunks by semantic similarity regardless of source
-3. Synthesizes information from multiple documents
-4. Provides unified answers with source attribution
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+    "question": "What are the main findings across all documents?",
+    "topK": 10,
+    "includeHistory": true
+  }'
+```
+
+Response:
+```json
+{
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+  "answer": "Based on the documents, the main findings include.. .",
+  "sources": ["Relevant excerpt from document1.. .", "Relevant excerpt from document2..."],
+  "sourceDocuments": ["document1.pdf", "document2.pdf"],
+  "question": "What are the main findings across all documents?",
+  "processingTimeMs": 2340
+}
+```
+
+### Delete a Session
+
+```bash
+curl -X DELETE http://localhost:8080/api/sessions/{sessionId}
+```
+
+This removes the session, all document metadata, conversation history, and vector embeddings.
 
 ## API Reference
 
+### Session Management
+
+#### Create Session
+- Endpoint: POST /api/sessions
+- Body: {"name": "string", "description": "string"} (both optional)
+- Response: SessionResponse with generated sessionId
+
+#### Get Session
+- Endpoint: GET /api/sessions/{sessionId}
+- Query Parameter: includeDocuments (boolean, default false)
+- Response: SessionResponse with session details
+
+#### List Sessions
+- Endpoint: GET /api/sessions
+- Response: Array of SessionResponse
+
+#### Delete Session
+- Endpoint: DELETE /api/sessions/{sessionId}
+- Response: 204 No Content
+
 ### Document Management
 
-#### Upload Document
+#### Upload Documents
+- Endpoint: POST /api/sessions/{sessionId}/documents
+- Content Type: multipart/form-data
+- Form Field: files (array of files)
+- Response: MultiDocumentUploadResponse
 
-**Endpoint**: `POST /api/documents/upload`
+#### Upload Single Document
+- Endpoint: POST /api/sessions/{sessionId}/documents/single
+- Content Type: multipart/form-data
+- Form Field: file
+- Response: MultiDocumentUploadResponse
 
-**Request**:
-- Method: `POST`
-- Content-Type: `multipart/form-data`
-- Body Parameter: `file` (PDF document)
+### Chat
 
-**Response**: `200 OK`
-```json
-{
-  "filename": "string",
-  "chunksCreated": "integer",
-  "chunksStored": "integer",
-  "message": "string",
-  "processingTimeMs": "long"
-}
-```
-
-**Error Responses**:
-- `400 Bad Request`: Invalid file format or missing file
-- `413 Payload Too Large`: File exceeds 10MB limit
-- `500 Internal Server Error`: Processing failure
-
-### Chat Interface
-
-#### Ask Question
-
-**Endpoint**: `POST /api/chat`
-
-**Request**:
-- Method: `POST`
-- Content-Type: `application/json`
+#### Send Message
+- Endpoint: POST /api/chat
 - Body:
 ```json
 {
+  "sessionId": "string (required)",
   "question": "string (required)",
-  "topK": "integer (optional, default: 5)"
+  "topK": "integer (optional, default 5, range 1 to 20)",
+  "includeHistory": "boolean (optional, default true)",
+  "historyLimit": "integer (optional, default 10, range 1 to 50)"
 }
 ```
+- Response: ChatResponse with answer and sources
 
-**Response**: `200 OK`
-```json
-{
-  "answer": "string",
-  "sources": ["string"],
-  "question": "string",
-  "processingTimeMs": "long"
-}
+## Project Structure
+
 ```
-
-**Error Responses**:
-- `400 Bad Request`: Invalid request format or empty question
-- `500 Internal Server Error`: Query processing failure
-
+chat-with-your-docs/
+├── src/
+│   ├── main/
+│   │   ├── java/io/github/kxng0109/chatwithdocs/
+│   │   │   ├── ChatWithDocsApplication.java
+│   │   │   ├── config/
+│   │   │   │   └── AiModelConfig.java
+│   │   │   ├── controller/
+│   │   │   │   ├── ChatController.java
+│   │   │   │   ├── DocumentController.java
+│   │   │   │   └── SessionController.java
+│   │   │   ├── service/
+│   │   │   │   ├── ChatService. java
+│   │   │   │   ├── DocumentService. java
+│   │   │   │   └── SessionService.java
+│   │   │   ├── model/
+│   │   │   │   ├── ChatRequest.java
+│   │   │   │   ├── ChatResponse.java
+│   │   │   │   ├── DocumentUploadResponse.java
+│   │   │   │   ├── MultiDocumentUploadResponse.java
+│   │   │   │   ├── SessionCreateRequest.java
+│   │   │   │   └── SessionResponse.java
+│   │   │   ├── entity/
+│   │   │   │   ├── ChatMessage.java
+│   │   │   │   ├── ChatSession.java
+│   │   │   │   └── SessionDocument.java
+│   │   │   ├── repository/
+│   │   │   │   ├── ChatMessageRepository.java
+│   │   │   │   ├── ChatSessionRepository.java
+│   │   │   │   └── SessionDocumentRepository.java
+│   │   │   └── exception/
+│   │   │       ├── DocumentProcessingException.java
+│   │   │       ├── GlobalExceptionHandler.java
+│   │   │       └── SessionNotFoundException.java
+│   │   └── resources/
+│   │       └── application.properties
+│   └── test/
+│       └── java/io/github/kxng0109/chatwithdocs/
+├── . env.example
+├── . gitignore
+├── docker-compose.yml
+├── pom.xml
+├── LICENSE
+└── README.md
+```
 
 ## Testing
 
-### Test Structure
+### Run All Tests
 
-The project includes comprehensive test coverage across multiple layers. See the project structure section above for test file locations.
-
-**Test Files:**
-- `DocumentControllerTest.java` - REST endpoint tests for document upload
-- `ChatControllerTest.java` - REST endpoint tests for chat queries
-- `DocumentServiceTest.java` - Business logic tests for document processing
-- `ChatServiceTest.java` - RAG pipeline tests
-- `ChatWithDocsApplicationIntegrationTest.java` - End-to-end integration tests
-
-### Running Tests
-
-#### Execute All Tests
-
+Linux and macOS:
 ```bash
 ./mvnw test
 ```
 
-#### Run Specific Test Class
+Windows:
+```cmd
+mvnw. cmd test
+```
+
+### Run Specific Test Class
 
 ```bash
-./mvnw test -Dtest=DocumentServiceTest
+./mvnw test -Dtest=ChatServiceTest
 ```
 
 ## Deployment
 
-### Docker Deployment
+### Docker Compose
 
-#### Build Docker Image
-
-```bash
-docker build -t chat-with-docs:latest .
-```
-
-#### Run with Docker Compose
-
+Start all services:
 ```bash
 docker-compose up -d
 ```
 
-**Verify services:**
-```bash
-docker-compose ps
-```
-
-**View logs:**
+View logs:
 ```bash
 docker-compose logs -f
 ```
 
-**Stop services:**
+Stop services:
 ```bash
 docker-compose down
 ```
 
-## AI Provider Configuration
+### Environment Variables for Production
 
-This application uses Spring AI's abstraction layer, enabling seamless integration with multiple AI providers without code changes.
-
-### Current Implementation: Ollama
-
-**Configuration**: See `application.properties` and `.env.example` for Ollama settings.
-
-**Advantages**:
-- Completely local execution
-- No API costs
-- Data privacy (no external transmission)
-- Offline capability
-
-### Alternative Provider: OpenAI
-**Dependency Change**: Update `pom.xml` to replace ollama with openai.
-
-**Configuration**: Set `OPENAI_API_KEY` and other relevant environment variables in `.env` file.
-
-**No Code Changes Required**: Spring AI abstractions (`ChatModel`, `EmbeddingModel`) remain identical.
-
-### Alternative Provider: Azure OpenAI
-
-**Dependency Change**: Update `pom.xml` to use azure.
-
-**Configuration**: Set Azure-specific environment variables in `.env` file.
-
-### Provider Selection Criteria
-
-**Choose Ollama if**:
-- Running locally or on-premises
-- Data privacy is critical
-- Zero API costs required
-- Offline operation needed
-
-**Choose Commercial Provider if**:
-- Highest quality responses required
-- Scalability beyond local resources
-- Enterprise support needed
-- Advanced model capabilities required (GPT-4, Claude 3, etc.)
+```bash
+POSTGRES_USERNAME=production_user
+POSTGRES_PASSWORD=secure_production_password
+SPRING_AI_PROVIDER=openai
+OPENAI_API_KEY=sk-production-key
+VECTOR_DIMENSIONS=1536
+```
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) file for full terms.
+This project is licensed under the MIT License. See the LICENSE file for details.
 
 ## Acknowledgments
 
-### Technologies
-- **Spring AI Team** - Excellent abstraction layer for AI integration
-- **Ollama Project** - Making local LLM execution accessible
-- **PGVector Team** - Efficient vector similarity search for PostgreSQL
-- **Apache Software Foundation** - Tika and PDFBox document processing libraries
-
-### Resources
-- [Spring AI Documentation](https://docs.spring.io/spring-ai/reference/)
-- [Ollama Documentation](https://github.com/ollama/ollama)
-- [PGVector Documentation](https://github.com/pgvector/pgvector)
+- Spring AI Team for the AI integration framework
+- Ollama Project for accessible local LLM execution
+- PGVector Team for PostgreSQL vector similarity search
+- Apache Software Foundation for Tika and PDFBox

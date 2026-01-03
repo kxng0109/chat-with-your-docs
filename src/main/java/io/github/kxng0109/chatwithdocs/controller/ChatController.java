@@ -34,10 +34,10 @@ public class ChatController {
     public ResponseEntity<ChatResponse> chat(
             @Valid @RequestBody ChatRequest chatRequest
     ) {
-        log.info("Received chat request: {}", chatRequest.question());
+        log.info("Received chat request: {} for session with ID: {}", chatRequest.question(), chatRequest.sessionId());
 
         ChatResponse chatResponse = chatService.chat(chatRequest);
-        log.info("Response received: {}", chatResponse.answer());
+        log.info("Response received in {}ms: {}", chatResponse.answer(), chatResponse.processingTimeMs());
         return ResponseEntity.ok(chatResponse);
     }
 
