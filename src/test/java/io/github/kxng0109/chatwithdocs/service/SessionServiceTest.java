@@ -13,8 +13,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -189,13 +193,13 @@ public class SessionServiceTest {
     void deleteSession_withValidId_shouldDeleteSessionAndVectors() {
         when(sessionRepository.findBySessionId(testSessionId))
                 .thenReturn(Optional.of(testSession));
-        doNothing().when(vectorStore).delete(Collections.singletonList(any()));
+        doNothing().when(vectorStore).delete(any(Filter.Expression.class));
         doNothing().when(sessionRepository).delete(testSession);
 
         sessionService.deleteSession(testSessionId);
 
         verify(sessionRepository).findBySessionId(testSessionId);
-        verify(vectorStore).delete(Collections.singletonList(any()));
+        verify(vectorStore).delete(any(Filter.Expression.class));
         verify(sessionRepository).delete(testSession);
     }
 
